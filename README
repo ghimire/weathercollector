@@ -1,0 +1,79 @@
+weathercollector - gnokii based Weather Data Collector written in PHP.
+                    Author: Prakash Ghimire (rhok@home.gm)
+
+Installation
+------------
+Install gnokii with mysql backend. On Debian/Ubuntu, this is done by,
+# apt-get install gnokii-common gnokii-smsd-mysql gnokii
+
+Connect your phone to computer through USB cable. The 'dmesg' command
+displays the device location. In many cases, it's /dev/ttyACM0
+
+Modify /etc/gnokiirc to add the port information, model, baudrate, and
+telephone number. Sample config is shown below.
+
+    [global]
+    port = /dev/ttyACM0
+    model = AT
+    initlength = default
+    connection = serial
+    use_locking = yes
+    serial_baudrate = 19200
+    smsc_timeout = 10
+    [xgnokii]
+    allow_breakage = 0
+    [gnokiid]
+    bindir = /usr/sbin/
+    [connect_script]
+    TELEPHONE = 1234567
+    [disconnect_script]
+    [logging]
+    debug = off
+    rlpdebug = off
+
+Test if it's working,
+$ echo "This is a test message." | gnokii --sendsms 987654321
+
+1) Create mysql database 
+   Example: 
+   > create database 'weather';
+   > grant all privileges on `weather`.* to `smsgw-user`@`localhost` identified
+     by 's3cr37passw0rd';
+2) Import weather.sql file
+   $ mysql -p -u smsgw-user weather < weather.sql
+   
+   You may delete weather.sql after importing it.
+   
+2) Modify include/config.php to match the db details above
+   Example:
+   define("HOST","localhost");
+   define("DB_NAME","weather");
+   define("DB_USER","sms-user");
+   define("DB_PW","s3cr37passw0rd");
+
+Running the application
+-----------------------
+For it to work, you need a domain with catch-all email address. Let's say
+it's sms@example.org. Any email sent to 1234@example.rog, abcd@example.org
+is forwarded to sms@example.org. This is handy since we can use the user
+portion of email address as Phone number.
+
+Once the catch-all email is working, start by add collect_weather_data.php 
+cron job to run every minute, shown as below:
+    * * * * * /usr/bin/php /path/to/service/collect_weather_data.php 
+
+Assuming, the details above, start gnokii daemon by typing following on the
+terminal:
+$ /usr/sbin/smsd -u sms-user -d weather -c localhost -m mysql -b IN -f /tmp/weather.log
+
+The daemon will monitor the weather database for any incoming text message on the
+phone first line of which is the email address and adds it to the outgoing
+email queue. sms2email.php goes through the email queue and sends the email.
+
+Incoming Text Message -> (phone) -> Send Email
+
+Any email received on catch-all email address is inspected for phone number
+regular expression in the user portion. (eg: 123456@example.org) The rest
+of the email is then added to the outgoing text queue which is delivered by smsd.
+
+Email (eg, To Address: 123456@example.org) -> (phone) -> Send Text to 12345 
